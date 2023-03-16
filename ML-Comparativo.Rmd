@@ -1,0 +1,208 @@
+![](Capa.png)
+---
+format:
+  pdf: 
+    toc: true
+    number-sections: true
+    colorlinks: true
+    code-line-numbers: true
+    papersize: a4
+css: Estilo.sty
+---
+---
+title: "Comparação Processamento Python X PySpark"
+author: "Luis Jesus TI"
+date: "2023-03-14"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introdução
+
+Criei dois exemplos exemplos de Machine Learning, o primeiro desenvolvido em PySpark, e o segundo em Python. Ambos com o mesmo objetivo, a classificação de acidentes rodoviários com o Random Forest Classifier. Os exemplos de código estão disponíveis no github, e seus exemplo foi compartilhado no Linkedin.
+
+Os links para as publicações e para os código estão na tabela abaixo:
+
+|Tecnologia |Código no github|Publicação no Linkedin|
+|---|---|---|
+|PySpark| Link [aqui](https://github.com/luisjesus-ti/ML-PySpark-RFC/blob/main/Spark-ML-RandomForestClassifier.Rmd)| Link [aqui](https://www.linkedin.com/feed/update/urn:li:activity:7039766779866288128/)|
+|Python | Link [aqui](https://github.com/luisjesus-ti/ML-Python-RFC/blob/main/Python-ML-RandomForestClassifier.Rmd)| Link [aqui](https://www.linkedin.com/feed/update/urn:li:activity:7038222919683977216/)| 
+
+Os códigos estão escritos em R Markdown, e podem ser executados no RStudio.
+
+Esses exemplos de Machine Leargning (Python e PySpark) foram executados considerando as combinações de período, conforme a tabela abaixo: 
+
+| Execução  | Dados dos Acidentes do(s) ano(s) |
+| ------- | -------- |
+| 1   | 2016    |
+| 2   | 2016; e 2017    |
+| 3   | 2016; 2017; e 2018    |
+| 4   | 2016; 2017; 2018;e 2019    |
+| 5   | 2016; 2017; 2018; 2019; e 2020    |
+| 6   | 2016; 2017; 2018; 2019; 2020; e 2021    |
+| 7   | 2016; 2017; 2018; 2019; 2020; 2021; e 2022    |
+
+Cada uma das execuções, executa o classificador 5 vezes, cujo tempos e acurácia são registrados e gravados em arquivo CSV, que serão processados neste programa para avaliação da \textit{performance} do processamento de treinamento e testes do modelo, a a acurácia.
+
+# Preparação do ambiente de processamento
+
+Carregar os pacotes.
+```{python} 
+import pandas as pd
+from datetime import datetime
+from plotnine import *
+
+```
+
+# Tempo e Acurácia
+
+Processamento dos arquivos com resultados dos processamentos.
+
+O trecho de código cria função para carregar os arquivos com o resultado do processamento do Python e do PySpark.
+
+```{python}
+# função para carregar os arquivos de acidentes de trânsito
+def carrega_arquivos(path_file, arquivo, df, _separador, _enconding):
+    print(f"Início da carga do arquivo: {arquivo}....", datetime.today())
+    # Carregar o arquivo
+    dftmp = pd.read_csv(path_file+arquivo, encoding=_enconding
+                       , decimal=","
+                       , sep=_separador
+                       , parse_dates=True)
+    # concatenar arquivos
+    df = pd.concat([df, dftmp], axis=0)
+    print(f"Final da carga do arquivo: {arquivo}....", datetime.today())
+    return df
+
+```
+
+## PySpark
+
+O trecho abaixo, carrega os arquivos com o resultado do processamento do exemplo realizado em PySpark.
+
+```{python}
+
+# criar dataframe vazio
+df1 = pd.read_csv("../ML-PySpark-RFC/dados/processamento1.csv"
+                  , sep=","
+                  , encoding="latin1"
+                  , nrows=0)
+df = df1.copy()
+del df1
+# loop para ler os 7 arquivos 
+for i in range(7):
+  path_file = "../ML-PySpark-RFC/dados/"
+  file = f"processamento{i+1}.csv"
+  df = carrega_arquivos(path_file, file, df, ",", "utf-8")
+
+# adicionar coluna com a tecnologia usada
+df['tecnologia'] = "PySpark"
+
+``` 
+
+## Python
+
+O trecho abaixo, carrega os arquivos com o resultado do processamento do exemplo realizado em Python.
+
+```{python}
+# criar dataframe vazio
+df1 = pd.read_csv("../ML-Python-RFC/dados/processamento1.csv"
+                 , sep=","
+                 , decimal=","
+                 , encoding="latin1"
+                 , nrows=0)
+df2 = df1.copy()
+del df1
+# loop para ler os 7 arquivos 
+for i in range(7):
+  path_file = "../ML-Python-RFC/dados/"
+  file = f"processamento{i+1}.csv"
+  
+  df2 = carrega_arquivos(path_file, file, df2, ",", "utf-8")
+
+# adicionar coluna com a tecnologia usada
+df2['tecnologia'] = "Python"
+df2["acuracia"] = pd.to_numeric(df2["acuracia"]) / 100
+
+``` 
+
+O trecho de código abaixo concatena os DataFrames com os tempos de processamento do Python e do PySpark.
+
+```{python}
+# Concatenar
+df = pd.concat([df, df2], axis=0)
+
+``` 
+
+O cálculo do tempo de processamento do treinamento e do teste do modelo de classificação.
+
+```{python}
+
+# Cálculo dos tempos
+df["tempo_fit_seg"] = pd.to_datetime(df["stop_fit"]) - \
+                      pd.to_datetime(df["start_fit"])
+df["tempo_predict_seg"] = pd.to_datetime(df["stop_predict"]) - \
+                          pd.to_datetime(df["start_predict"])
+
+# Transformar tipo de dados da acurácia
+df["acuracia"] = pd.to_numeric(df["acuracia"])
+
+```
+
+
+# Resultados
+
+O tempo de treinamento do Modelo de Classificação realizado pelo PySpark apresenta \textit{performance} ligeiramente inferior somente no primeiro processamento, com pouco mais de 60 mil registros de acidentes. A partir da segunda execução (~120 mil registros de acidentes) o PySpark já apresenta melhor \textit{performance} em relação ao Python. À medida que a quantidade de registros aumenta, a \textit{performance} do Python fica mais distante da \textit{perfornance} do PySpark. Na última execução, com ~388 mil registros de acidentes, o PySpark realizou o treinamento do modelo gastando aproximadamente 30% do tempo que o Python realizou a mesma tarefa.
+
+\textbf{Observação:}
+
+- O treinamento do modelo foi realizado com 70% dos dados. O teste foi realizado com 30% dos dados.
+
+## Tempo do treinamento do modelo
+
+O Gráfico abaixo mostra a comparação entre o PySpark e Python no treinamento do modelo.
+
+```{python echo = FALSE}
+
+ggplot(data=df) + \
+  geom_point(mapping=aes(x='total_registros', y='tempo_fit_seg',)) +\
+    theme(axis_text_x = element_text(angle=90, hjust=1)) +\
+    facet_wrap("tecnologia", nrow=1)
+
+
+```
+## Tempo do teste do modelo
+
+Para o teste do modelo, conforme pode-se verificar no gráfico abaixo, o PySpark apresenta resultados abaixo de 1 segundo para todas as quantidades. O Python apresenta valores variados e maiores à medida que a quantidade de acidentes testados aumenta.
+
+
+```{python}
+ggplot(data=df) + \
+  geom_point(mapping=aes(x='total_registros', y='tempo_predict_seg')) +\
+    theme(axis_text_x = element_text(angle=90, hjust=1)) +\
+    facet_wrap("tecnologia", nrow=1)
+
+```
+## A acurária do modelo
+
+A acurácia do modelo foi superior em Python, apresentando também menor variação de acurácia nos testes, conforme pode ser visto no gráfico abaixo.
+
+
+```{python}
+ggplot(data=df) + \
+  geom_point(mapping=aes(x='total_registros', y='acuracia')) +\
+    theme(axis_text_x = element_text(angle=90, hjust=1)) +\
+    facet_wrap("tecnologia", nrow=1)
+
+```
+
+
+
+# Conclusão
+
+O PySpark apresentou melhor \textit{performance} nos testes realizados. O Python apresentou melhor acurácia.
